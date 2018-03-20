@@ -25,7 +25,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
   1. Add alembic to your list of dependencies in `mix.exs`:
 
         def deps do
-          [{:alembic, "~> 3.0"}]
+          [{:alembic, "~> 3.4"}]
         end
 
   2. Ensure alembic is started before your application:
