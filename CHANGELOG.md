@@ -3,41 +3,43 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Changelog](#changelog)
+  - [v3.4.1](#v341)
+    - [Bug Fixes](#bug-fixes)
   - [v3.4.0](#v340)
     - [Enhancements](#enhancements)
-    - [Bug Fixes](#bug-fixes)
+    - [Bug Fixes](#bug-fixes-1)
   - [v3.3.0](#v330)
     - [Enhancements](#enhancements-1)
-    - [Bug Fixes](#bug-fixes-1)
+    - [Bug Fixes](#bug-fixes-2)
   - [v3.2.0](#v320)
     - [Enhancements](#enhancements-2)
-    - [Bug Fixes](#bug-fixes-2)
-  - [v3.1.1](#v311)
     - [Bug Fixes](#bug-fixes-3)
+  - [v3.1.1](#v311)
+    - [Bug Fixes](#bug-fixes-4)
   - [v3.1.0](#v310)
     - [Enhancements](#enhancements-3)
-    - [Bug Fixes](#bug-fixes-4)
+    - [Bug Fixes](#bug-fixes-5)
   - [v3.0.0](#v300)
     - [Enhancements](#enhancements-4)
-    - [Bug Fixes](#bug-fixes-5)
+    - [Bug Fixes](#bug-fixes-6)
     - [Incompatible Changes](#incompatible-changes)
   - [v2.4.0](#v240)
     - [Enhancements](#enhancements-5)
   - [v2.3.0](#v230)
     - [Enhancements](#enhancements-6)
-    - [Bug Fixes](#bug-fixes-6)
+    - [Bug Fixes](#bug-fixes-7)
   - [v2.2.0](#v220)
     - [Enhancements](#enhancements-7)
   - [v2.1.1](#v211)
-    - [Bug Fixes](#bug-fixes-7)
+    - [Bug Fixes](#bug-fixes-8)
   - [v2.1.0](#v210)
     - [Enhancements](#enhancements-8)
-    - [Bug Fixes](#bug-fixes-8)
-  - [v2.0.1](#v201)
     - [Bug Fixes](#bug-fixes-9)
+  - [v2.0.1](#v201)
+    - [Bug Fixes](#bug-fixes-10)
   - [v2.0.0](#v200)
     - [Enhancements](#enhancements-9)
-    - [Bug Fixes](#bug-fixes-10)
+    - [Bug Fixes](#bug-fixes-11)
     - [Incompatible Changes](#incompatible-changes-1)
   - [v1.0.0](#v100)
     - [Enhancements](#enhancements-10)
@@ -46,6 +48,11 @@
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
 # Changelog
+
+## v3.4.1
+
+### Bug Fixes
+* [#51](https://github.com/C-S-D/alembic/pull/51) - Instead of converting only the errors in the top level `changeset` passed to `Alembic.Document.from_ecto_changeset/2`, use the `Ecto`-recommended `Ecto.Changeset.traverse_errors/2` to walk the nested changeset errors and lift them up so that they appears as `Alembic.Error.t`s in the `Alembic.Document.t` `errors`. - [@KronicDeth](https://github.com/KronicDeth)
 
 ## v3.4.0
 
