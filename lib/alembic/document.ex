@@ -3,7 +3,19 @@ defmodule Alembic.Document do
   JSON API refers to the top-level JSON structure as a [document](http://jsonapi.org/format/#document-structure).
   """
 
-  alias Alembic.{Error, FromJson, Links, Meta, Pagination, Resource, ResourceLinkage, Source, ToEctoSchema, ToParams}
+  alias Alembic.{
+    Error,
+    Errors,
+    FromJson,
+    Links,
+    Meta,
+    Pagination,
+    Resource,
+    ResourceLinkage,
+    Source,
+    ToEctoSchema,
+    ToParams
+  }
 
   # Behaviours
 
@@ -259,19 +271,20 @@ defmodule Alembic.Document do
   Converts the `errors` in `ecto_changeset` to `Alembic.Error.t` in a single `t`.
 
   If only `:format_key` is given in the `options`, then the other keys for
-  `Alembic.Source.pointer_path_from_ecto_changeset_error_field_options` will be derived from the `ecto_schema_module` of
-  the `changeset` `:data`.
+  `t:Alembic.Source.ancestor_descendants_from_ecto_changeset_path_options/0` will be derived from the
+  `ecto_schema_module` of the `changeset` `:data`.
 
       iex> format_key = fn key ->
       ...>   key |> Atom.to_string() |> String.replace("_", "-")
       ...> end
+      iex> changeset = Ecto.Changeset.change(%Alembic.TestAuthor{id: 1})
       iex> Document.from_ecto_changeset(
       ...>   %Ecto.Changeset{
-      ...>     data: %Alembic.TestAuthor{id: 1},
-      ...>     errors: [
-      ...>       {:name, {"should be at least %{count} character(s)", [count: 2, validation: :length, min: 2]}},
-      ...>       {:posts, {"are still associated with this entry", []}}
-      ...>     ]
+      ...>     changeset
+      ...>     | errors: [
+      ...>         {:name, {"should be at least %{count} character(s)", [count: 2, validation: :length, min: 2]}},
+      ...>         {:posts, {"are still associated with this entry", []}}
+      ...>       ]
       ...>   },
       ...>   %{format_key: format_key}
       ...> )
@@ -296,7 +309,8 @@ defmodule Alembic.Document do
 
   If the `ecto_changeset` `data` is not an `Ecto.Schema.t` struct and `__schema__/1` reflection functions are not
   supported, then you can bypass the reflection by giving the
-  `Alembic.Source.pointer_path_from_ecto_changeset_error_field_options` explicitly
+  `t:Alembic.Source.ancestor_descendants_from_ecto_changeset_path_options/0` explicitly.  You'll also need to supply the
+  `types` in `Ecto.Changeset.t` `types` key.
 
       iex> format_key = fn key ->
       ...>   key |> Atom.to_string() |> String.replace("_", "-")
@@ -307,7 +321,38 @@ defmodule Alembic.Document do
       ...>     errors: [
       ...>       {:name, {"should be at least %{count} character(s)", [count: 2, validation: :length, min: 2]}},
       ...>       {:posts, {"are still associated with this entry", []}}
-      ...>     ]
+      ...>     ],
+      ...>     types: %{
+      ...>       id: :id,
+      ...>       name: :string,
+      ...>       posts: {:assoc,
+      ...>         %Ecto.Association.Has{
+      ...>           cardinality: :many,
+      ...>           field: :posts,
+      ...>           on_delete: :nothing,
+      ...>           on_replace: :raise,
+      ...>           owner: Alembic.TestAuthor,
+      ...>           owner_key: :id,
+      ...>           queryable: Alembic.TestPost,
+      ...>           related: Alembic.TestPost,
+      ...>           related_key: :author_id,
+      ...>           relationship: :child
+      ...>         }},
+      ...>       profile: {:assoc,
+      ...>         %Ecto.Association.Has{
+      ...>           cardinality: :one,
+      ...>           field: :profile,
+      ...>           on_delete: :nothing,
+      ...>           on_replace: :raise,
+      ...>           owner: Alembic.TestAuthor,
+      ...>           owner_key: :id,
+      ...>           queryable: Alembic.TestProfile,
+      ...>           related: Alembic.TestProfile,
+      ...>           related_key: :author_id,
+      ...>           relationship: :child,
+      ...>           unique: true
+      ...>         }}
+      ...>     }
       ...>   },
       ...>   %{
       ...>     association_set: MapSet.new([:posts]),
@@ -335,29 +380,94 @@ defmodule Alembic.Document do
         ]
       }
 
-  """
-  @spec from_ecto_changeset(Ecto.Changeset.t, Source.pointer_path_from_ecto_changeset_error_field_options) :: t
-  def from_ecto_changeset(
-        %Ecto.Changeset{errors: errors},
-        options = %{association_set: _, association_by_foreign_key: _, attribute_set: _, format_key: _}
-      ) do
-    alembic_errors = Enum.map errors,
-                              &Error.from_ecto_changeset_error(&1, options)
+  ## Nested Errors
 
-    %__MODULE__{
-      errors: alembic_errors
-    }
+  Errors on nested associations and embeds are traversed and the nested JSON pointer calculated
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> post_changeset = Alembic.TestPost.changeset(%Alembic.TestPost{}, %{"text" => "too short"})
+      iex> author_changeset = Alembic.TestAuthor.changeset(%Alembic.TestAuthor{}, %{"name" => "A"})
+      iex> changeset = Ecto.Changeset.put_assoc(post_changeset, :author, author_changeset)
+      iex> Document.from_ecto_changeset(changeset, %{format_key: format_key})
+      %Alembic.Document{
+        errors: [
+          %Alembic.Error{
+            detail: "author name should be at least 2 character(s)",
+            source: %Alembic.Source{
+              pointer: "/data/relationships/author/name"
+            },
+            title: "should be at least 2 character(s)"
+          },
+          %Alembic.Error{
+            detail: "text should be at least 50 character(s)",
+            source: %Alembic.Source{
+              pointer: "/data/attributes/text"
+            },
+            title: "should be at least 50 character(s)"
+          }
+        ]
+      }
+
+  Errors on `*_many` associations have a 0-based index assigned in the JSON pointer
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> post_changeset = Alembic.TestPost.changeset(%Alembic.TestPost{}, %{"text" => "too short"})
+      iex> comment_changeset = Alembic.TestComment.changeset(%Alembic.TestComment{}, %{})
+      iex> changeset = Ecto.Changeset.put_assoc(post_changeset, :comments, [comment_changeset])
+      iex> Document.from_ecto_changeset(changeset, %{format_key: format_key})
+      %Alembic.Document{
+        errors: [
+          %Alembic.Error{
+            detail: "comments 0 text can't be blank",
+            source: %Alembic.Source{
+              pointer: "/data/relationships/comments/0/text"
+            },
+            title: "can't be blank"
+          },
+          %Alembic.Error{
+            detail: "text should be at least 50 character(s)",
+            source: %Alembic.Source{
+              pointer: "/data/attributes/text"
+            },
+            title: "should be at least 50 character(s)"
+          }
+        ]
+      }
+
+  """
+  @spec from_ecto_changeset(
+          Ecto.Changeset.t(),
+          Source.ancestor_descendants_from_ecto_changeset_path_options()
+        ) :: t()
+  def from_ecto_changeset(
+        changeset = %Ecto.Changeset{},
+        options = %{
+          association_set: _,
+          association_by_foreign_key: _,
+          attribute_set: _,
+          format_key: _
+        }
+      ) do
+    errors = Errors.from_ecto_changeset(changeset, options)
+
+    %__MODULE__{errors: errors}
   end
 
-  @spec from_ecto_changeset(Ecto.Changeset.t, %{required(:format_key) => (atom -> String.t)}) :: t
+  @spec from_ecto_changeset(Ecto.Changeset.t(), %{required(:format_key) => (atom -> String.t())}) :: t
   def from_ecto_changeset(
         ecto_changeset = %Ecto.Changeset{data: %ecto_schema_module{}},
         options = %{format_key: _}
       ) do
-    full_options = Map.merge(
-      options,
-      Source.pointer_path_from_ecto_changeset_error_field_options_from_ecto_schema_module(ecto_schema_module)
-    )
+    full_options =
+      Map.merge(
+        options,
+        Source.ancestor_descendants_from_ecto_changeset_path_options_from_ecto_schema_module(ecto_schema_module)
+      )
+
     from_ecto_changeset(ecto_changeset, full_options)
   end
 
