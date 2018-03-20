@@ -49,7 +49,7 @@ defmodule Alembic.Mixfile do
   defp deps do
     [
       # static code analysis for style and consistency
-      {:credo, "0.8.5", only: [:dev, :test]},
+      {:credo, "0.8.10", only: [:dev, :test]},
       # success type checker: ensures @type and @spec are valid
       {:dialyze, "~> 0.2.1", only: [:dev, :test]},
       # markdown to HTML converter for ex_doc
