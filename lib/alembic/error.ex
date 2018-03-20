@@ -268,6 +268,8 @@ defmodule Alembic.Error do
       }
 
   """
+  @deprecated "Use from_ecto_changeset_path/2 instead as it handles deeply nested paths for object attributes and " <>
+                "embeds"
   @spec from_ecto_changeset_error(ecto_changeset_error, Source.pointer_path_from_ecto_changeset_error_field_options) ::
           Error.t
   def from_ecto_changeset_error(
@@ -287,12 +289,144 @@ defmodule Alembic.Error do
              },
              title: title
            }
+
          :error ->
            %__MODULE__{
              detail: "#{format_key.(field)} #{title}",
              title: title
            }
        end
+  end
+
+  @doc """
+  Converts an `Ecto.Changeset.t` error composed of the `path` the error occurred on and the error `message`.  `path`
+  is a list of fields and indexes to get to the error.
+
+  The `path` is converted an `t:Alembic.Source.t/0` `:pointer`.  If it cannot be converted, then the returned `t` will
+  have not `:source`.  The descendants part of the `:pointer` is formatted with `:format_key`.
+
+  If `hd(path)` is in `association_set` in `options`, then the `pointer` will be under `/data/relationships`.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Error.from_ecto_changeset_path(
+      ...>   [:favorite_posts],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      %Alembic.Error{
+        detail: "favorite-posts",
+        source: %Alembic.Source{
+          pointer: "/data/relationships/favorite-posts"
+        }
+      }
+
+  If `hd(path)` is a key in `association_by_foreign_key` in `options`, then the `pointer` will be under
+  `/data/relationships`, but the child will be the name of the (formatted) association instead of the foreign key field
+  itself as JSONAPI attributes should not contain foreign keys.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Error.from_ecto_changeset_path(
+      ...>   [:designated_editor_id],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      %Alembic.Error{
+        detail: "designated-editor",
+        source: %Alembic.Source{
+          pointer: "/data/relationships/designated-editor"
+        }
+      }
+
+  If `hd(path)` is in `attribute_set` in `options`, then the `pointer` will be under `/data/attributes`.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Error.from_ecto_changeset_path(
+      ...>   [:first_name],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      %Alembic.Error{
+        detail: "first-name",
+        source: %Alembic.Source{
+          pointer: "/data/attributes/first-name"
+        }
+      }
+
+  If `hd(path)` is not in `association_set`, `attribute_set`, or a foreign key in `association_by_foreign_key` in
+  `options`, then the `t` `:source` will be `nil`
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Error.from_ecto_changeset_path(
+      ...>   [:favorite_flavor],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      %Alembic.Error{
+        detail: "favorite_flavor"
+      }
+
+  Only the `hd(path)` is looked up in `options`: the `tl(path)` is assumed to need no translation, only formatting.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Error.from_ecto_changeset_path(
+      ...>   [:author, :posts, 0, :author, :name],
+      ...>   %{
+      ...>     association_set: MapSet.new(~w(author comments tags)a),
+      ...>     association_by_foreign_key: %{author_id: :author},
+      ...>     attribute_set: MapSet.new(~w(inserted_at text updated_at)a),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      %Alembic.Error{
+        detail: "author posts 0 author name",
+        source: %Alembic.Source{
+          pointer: "/data/relationships/author/posts/0/author/name"
+        }
+      }
+
+  """
+  @since "3.5.0"
+  def from_ecto_changeset_path(path, options) when is_list(path) and is_map(options) do
+    path
+    |> Source.ancestor_descendants_from_ecto_changeset_path(options)
+    |> case do
+      {:ok, ancestor_descendants = {_, descendants}} ->
+        %__MODULE__{
+          detail: path_to_detail(descendants),
+          source: Source.from_ancestor_descendants(ancestor_descendants)
+        }
+
+      :error ->
+        %__MODULE__{
+          detail: path_to_detail(path)
+        }
+    end
   end
 
   @doc """
@@ -680,6 +814,12 @@ defmodule Alembic.Error do
       status: "422",
       title: "Type is wrong"
     }
+  end
+
+  ## Private Functions
+
+  defp path_to_detail(path) when is_list(path) do
+    Enum.join(path, " ")
   end
 
   defimpl Poison.Encoder do
