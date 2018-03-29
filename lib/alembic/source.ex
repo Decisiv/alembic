@@ -16,22 +16,42 @@ defmodule Alembic.Source do
   # Types
 
   @typedoc """
+  The `ancestor` pointer and the `descendants` of that `ancestor`.
+  """
+  @type ancestor_descendants :: {ancestor :: Api.json_pointer(), descenants :: [String.t(), ...]}
+
+  @typedoc """
+  Options for `ancestor_descendants_from_ecto_changeset_path/2`.
+  """
+  @type ancestor_descendants_from_ecto_changeset_path_options :: %{
+          required(:association_set) => MapSet.t(atom),
+          required(:association_by_foreign_key) => %{
+            atom => atom
+          },
+          required(:attribute_set) => MapSet.t(atom),
+          required(:format_key) => (atom -> String.t())
+        }
+
+  @typedoc """
   A single error field key in the `Ecto.Changeset.t` `:errors` `Keyword.t`
   """
   @type ecto_changeset_error_field :: atom
 
   @typedoc """
-  Options for `Alembic.Source.pointer_path_from_ecto_changeset_error_field_options`
   """
-  @type pointer_path_from_ecto_changeset_error_field_options ::
-          %{
-            required(:association_set) => MapSet.t(atom),
-            required(:association_by_foreign_key) => %{
-              atom => atom
-            },
-            required(:attribute_set) => MapSet.t(atom),
-            required(:format_key) => (atom -> String.t)
-          }
+  @type ecto_changeset_path :: [atom() | non_neg_integer(), ...]
+
+  @typedoc """
+  Options for `Alembic.Source.pointer_path_from_ecto_changeset_error_field/2`
+  """
+  @type pointer_path_from_ecto_changeset_error_field_options :: %{
+          required(:association_set) => MapSet.t(atom),
+          required(:association_by_foreign_key) => %{
+            atom => atom
+          },
+          required(:attribute_set) => MapSet.t(atom),
+          required(:format_key) => (atom -> String.t())
+        }
 
   @typedoc """
   A pointer path is composed of the `parent` pointer and the final `child` name.
@@ -57,6 +77,143 @@ defmodule Alembic.Source do
              }
 
   @doc """
+  Converts an `ecto_changeset_path` to a `t:ancestor_descendants/0` that can be used to generate both the
+  `Alembic.Source.t` `:pointer` and `Alembic.Error.t` `:detail`
+
+  If `ecto_changeset_path` is in the `association_set`, then the `pointer_path` will be under
+  `/data/relationships` and the `descendants` `String.t` will be formatted with `format_key`, so that the expected
+  underscore and hypenation rules are followed.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Source.ancestor_descendants_from_ecto_changeset_path(
+      ...>   [:favorite_posts],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      {:ok, {"/data/relationships", ["favorite-posts"]}}
+
+  If `ecto_changeset_path` is a key in `association_by_foreign_key`, then the associated association is used for
+  `child` and the parent is `/data/relationships` the same as if the `ecto_cahgneset_error_field` were directly an
+  associaton name.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Source.ancestor_descendants_from_ecto_changeset_path(
+      ...>   [:designated_editor_id],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      {:ok, {"/data/relationships", ["designated-editor"]}}
+
+  If `ecto_changeset_path` is in the `attribute_set`, then the `pointer_path` will be under `/data/attributes`
+  and the `descendants` `t:String.t/0`s will be formated with `format_key`, so that the expected underscore and hypenation rules
+  are followed.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Source.ancestor_descendants_from_ecto_changeset_path(
+      ...>   [:first_name],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      {:ok, {"/data/attributes", ["first-name"]}}
+
+  If `ecto_changeset_path` is not in `association_set`, `attribute_set` or a foreign key in
+  `association_by_foreign_key`, then `:error` is returned.  Callers should treat this as indicating the error has no
+  source pointer and the `Alembic.Error.t` `:source` should be left `nil`.
+
+      iex> format_key = fn key ->
+      ...>   key |> Atom.to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Source.ancestor_descendants_from_ecto_changeset_path(
+      ...>   [:name],
+      ...>   %{
+      ...>     association_set: MapSet.new([:designated_editor, :favorite_posts]),
+      ...>     association_by_foreign_key: %{designated_editor_id: :designated_editor},
+      ...>     attribute_set: MapSet.new([:first_name, :last_name]),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      :error
+
+  Only the `hd(path)` is looked up in `options`: the `tl(path)` is assumed to need no translation, only formatting.
+
+      iex> format_key = fn key ->
+      ...>   key |> to_string() |> String.replace("_", "-")
+      ...> end
+      iex> Alembic.Source.ancestor_descendants_from_ecto_changeset_path(
+      ...>   [:primary_authority, :favorite_posts, 0, :primary_authority, :formal_name],
+      ...>   %{
+      ...>     association_set: MapSet.new(~w(favorite_posts primary_authority)a),
+      ...>     association_by_foreign_key: %{primary_authority_id: :primary_authority},
+      ...>     attribute_set: MapSet.new(~w(inserted_at text updated_at)a),
+      ...>     format_key: format_key
+      ...>   }
+      ...> )
+      {:ok,
+       {"/data/relationships",
+        ["primary-authority", "favorite-posts", "0", "primary-authority", "formal-name"]}}
+
+  """
+  @since "3.5.0"
+  @spec ancestor_descendants_from_ecto_changeset_path(
+          ecto_changeset_path,
+          ancestor_descendants_from_ecto_changeset_path_options
+        ) :: {:ok, ancestor_descendants} | :error
+  def ancestor_descendants_from_ecto_changeset_path(path = [head | tail], %{
+        association_set: association_set,
+        association_by_foreign_key: association_by_foreign_key,
+        attribute_set: attribute_set,
+        format_key: format_key
+      }) do
+    cond do
+      head in attribute_set ->
+        {:ok, {"/data/attributes", format_keys(path, format_key)}}
+
+      head in association_set ->
+        {:ok, {"/data/relationships", format_keys(path, format_key)}}
+
+      true ->
+        case Map.fetch(association_by_foreign_key, head) do
+          {:ok, association} ->
+            {:ok, {"/data/relationships", format_keys([association | tail], format_key)}}
+
+          :error ->
+            :error
+        end
+    end
+  end
+
+  @doc """
+  Joins `ancestor` and `descendants` into one `t:Alembic.Api.json_pointer/0`.
+
+      iex> Alembic.Source.ancestor_descendants_to_pointer({"/data/attributes", ["recipients", "0", "name"]})
+      "/data/attributes/recipients/0/name"
+
+  """
+  @since "3.5.0"
+  @spec ancestor_descendants_to_pointer(ancestor_descendants) :: Api.json_pointer()
+  def ancestor_descendants_to_pointer({ancestor, descendants}) when is_binary(ancestor) and is_list(descendants) do
+    "#{ancestor}/#{Enum.join(descendants, "/")}"
+  end
+
+  @doc """
   Descends `pointer` to `child` of current `pointer`
 
       iex> Alembic.Source.descend(
@@ -73,6 +230,21 @@ defmodule Alembic.Source do
   @spec descend(t, String.t | integer) :: t
   def descend(source = %__MODULE__{pointer: pointer}, child) do
     %__MODULE__{source | pointer: "#{pointer}/#{child}"}
+  end
+
+  @doc """
+  Converts a `ancestor_descendants` to a full `t`
+
+      iex> Alembic.Source.from_ancestor_descendants({"/data/attributes", ["recipients", "0", "name"]})
+      %Alembic.Source{
+        pointer: "/data/attributes/recipients/0/name"
+      }
+
+  """
+  @since "3.5.0"
+  @spec from_ancestor_descendants(ancestor_descendants) :: t()
+  def from_ancestor_descendants(ancestor_descendants) do
+    %__MODULE__{pointer: ancestor_descendants_to_pointer(ancestor_descendants)}
   end
 
   @doc """
@@ -327,6 +499,7 @@ defmodule Alembic.Source do
       :error
 
   """
+  @deprecated "Use ancestor_descendants_from_ecto_changeset_path/2"
   @spec pointer_path_from_ecto_changeset_error_field(
           ecto_changeset_error_field,
           pointer_path_from_ecto_changeset_error_field_options
@@ -356,7 +529,7 @@ defmodule Alembic.Source do
   end
 
   @doc false
-  @spec pointer_path_from_ecto_changeset_error_field_options_from_ecto_schema_module(Ecto.Schema.t) ::
+  @spec ancestor_descendants_from_ecto_changeset_path_options_from_ecto_schema_module(Ecto.Schema.t) ::
           %{
             required(:association_set) => MapSet.t(atom),
             required(:association_by_foreign_key) => %{
@@ -364,7 +537,7 @@ defmodule Alembic.Source do
             },
             required(:attribute_set) => MapSet.t(atom)
           }
-  def pointer_path_from_ecto_changeset_error_field_options_from_ecto_schema_module(ecto_schema_module) do
+  def ancestor_descendants_from_ecto_changeset_path_options_from_ecto_schema_module(ecto_schema_module) do
     associations = ecto_schema_module.__schema__(:associations)
     association_by_foreign_key = association_by_foreign_key(associations, ecto_schema_module)
     attributes = ecto_schema_module_to_attributes(
@@ -398,6 +571,10 @@ defmodule Alembic.Source do
     keys = ecto_schema_module.__struct__()
            |> Map.keys()
     keys -- [:__meta__, :__struct__ | exclusions]
+  end
+
+  defp format_keys(path, format_key) when is_list(path) and is_function(format_key, 1) do
+    Enum.map(path, format_key)
   end
 
   # Implementations
