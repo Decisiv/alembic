@@ -114,9 +114,9 @@ defmodule Alembic.Mixfile do
         "Github" => "https://github.com/C-S-D/alembic",
       },
       maintainers: [
-        "Luke Imhoff",
-        "Jeff Utter"
-      ]
+        "Luke Imhoff <luke.imhoff@dockyard.com>"
+      ],
+      organization: "decisiv"
     ]
   end
 end
