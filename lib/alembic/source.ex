@@ -56,7 +56,7 @@ defmodule Alembic.Source do
   @typedoc """
   A pointer path is composed of the `parent` pointer and the final `child` name.
   """
-  @type pointer_path :: {parent :: Api.json_pointer, child :: String.t}
+  @type pointer_path :: {parent :: Alembic.json_pointer, child :: String.t}
 
   @typedoc """
   An object containing references to the source of the [error](http://jsonapi.org/format/#error-objects), optionally
@@ -73,7 +73,7 @@ defmodule Alembic.Source do
              |
              %__MODULE__{
                parameter: nil,
-               pointer: Api.json_pointer
+               pointer: Alembic.json_pointer
              }
 
   @doc """

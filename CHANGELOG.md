@@ -53,6 +53,9 @@
 
 ### Bug Fixes
 * [#51](https://github.com/C-S-D/alembic/pull/51) - Instead of converting only the errors in the top level `changeset` passed to `Alembic.Document.from_ecto_changeset/2`, use the `Ecto`-recommended `Ecto.Changeset.traverse_errors/2` to walk the nested changeset errors and lift them up so that they appears as `Alembic.Error.t`s in the `Alembic.Document.t` `errors`. - [@KronicDeth](https://github.com/KronicDeth)
+* [#52](https://github.com/C-S-D/alembic/pull/52) - [@KronicDeth](https://github.com/KronicDeth)
+  * Remove references to `(InterpreterServer.)Api` that were leftover from when `Alembic` was open-sourced and extracted from `interpreter-server`.
+    * Replace references to `Api.json_pointer` with `Alembic.json_pointer` as they couldn't be resolved and triggered an `Unknown Type: Elixir.Api.json_pointer` when dialyzer is used in dependent projects.
 
 ## v3.4.0
 

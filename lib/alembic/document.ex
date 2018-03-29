@@ -1971,7 +1971,7 @@ defmodule Alembic.Document do
   [`Ecto.Changeset.cast/4`](http://hexdocs.pm/ecto/Ecto.Changeset.html#cast/4) using the given
   `resources_by_id_by_type` and `converted_by_id_by_type`.
 
-  See `InterpreterServer.Api.Document.to_params/1`
+  See `Alembic.Document.to_params/1`
   """
   @spec to_params(
           %__MODULE__{data: [Resource.t] | Resource.t | nil},
