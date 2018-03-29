@@ -47,6 +47,11 @@
 
 # Changelog
 
+## v3.4.1
+* [#52](https://github.com/C-S-D/alembic/pull/52) - [@KronicDeth](https://github.com/KronicDeth)
+  * Remove references to `(InterpreterServer.)Api` that were leftover from when `Alembic` was open-sourced and extracted from `interpreter-server`.
+    * Replace references to `Api.json_pointer` with `Alembic.json_pointer` as they couldn't be resolved and triggered an `Unknown Type: Elixir.Api.json_pointer` when dialyzer is used in dependent projects.
+
 ## v3.4.0
 
 ### Enhancements
