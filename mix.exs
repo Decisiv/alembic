@@ -28,7 +28,7 @@ defmodule Alembic.Mixfile do
         "coveralls.html": :test,
         "coveralls.post": :test
       ],
-      source_url: "https://github.com/C-S-D/alembic",
+      source_url: "https://github.com/Decisiv/alembic",
       start_permanent: Mix.env == :prod,
       test_coverage: [tool: ExCoveralls],
       version: "3.4.1"
@@ -110,8 +110,7 @@ defmodule Alembic.Mixfile do
       files: ["lib", "mix.exs" | extras()],
       licenses: ["Apache 2.0"],
       links: %{
-        "Docs" => "https://hexdocs.pm/alembic",
-        "Github" => "https://github.com/C-S-D/alembic",
+        "Github" => "https://github.com/Decisiv/alembic",
       },
       maintainers: [
         "Luke Imhoff <luke.imhoff@dockyard.com>"
